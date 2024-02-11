@@ -11,10 +11,14 @@
 #include <gl2d/gl2d.h>
 #include <platformTools.h>
 #include <tiledRenderer.h>
+#include <bullet.h>
+#include <vector>
 
 struct GameplayData
 {
 	glm::vec2 playerPos = {100,100};
+
+	std::vector<Bullet> bullets;
 };
 
 
@@ -22,10 +26,13 @@ GameplayData data;
 
 gl2d::Renderer2D renderer;
 
-constexpr int BACKGROUNDS = 3;
+constexpr int BACKGROUNDS = 4;
 
 gl2d::Texture spaceShipTexture;
 gl2d::TextureAtlasPadding spaceShipsAtlas;
+
+gl2d::Texture bulletsTexture;
+gl2d::TextureAtlasPadding bulletsAtlas;
 
 gl2d::Texture backgroundTexture[BACKGROUNDS];
 TiledRenderer tiledRenderer[BACKGROUNDS];
@@ -37,17 +44,27 @@ bool initGame()
 	renderer.create();
 
 	//adding enemies using a texture atlas
-	spaceShipTexture.loadFromFileWithPixelPadding(RESOURCES_PATH "spaceShip/stichedFiles/spaceships.png", 128, true);
+	spaceShipTexture.loadFromFileWithPixelPadding(RESOURCES_PATH "spaceShip/stitchedFiles/spaceships.png", 128, true);
 	spaceShipsAtlas = gl2d::TextureAtlasPadding(5, 2, spaceShipTexture.GetSize().x, spaceShipTexture.GetSize().y);
+
+	bulletsTexture.loadFromFileWithPixelPadding(RESOURCES_PATH "spaceShip/stitchedFiles/projectiles.png", 128, true);
+	bulletsAtlas = gl2d::TextureAtlasPadding(3, 2, bulletsTexture.GetSize().x, bulletsTexture.GetSize().y);
 
 	backgroundTexture[0].loadFromFile(RESOURCES_PATH "background1.png", true);
 	backgroundTexture[1].loadFromFile(RESOURCES_PATH "background2.png", true);
-	backgroundTexture[2].loadFromFile(RESOURCES_PATH "background4.png", true);
+	backgroundTexture[2].loadFromFile(RESOURCES_PATH "background3.png", true);
+	backgroundTexture[3].loadFromFile(RESOURCES_PATH "background4.png", true);
 
 	tiledRenderer[0].texture = backgroundTexture[0];
 	tiledRenderer[1].texture = backgroundTexture[1];
 	tiledRenderer[2].texture = backgroundTexture[2];
-	
+	tiledRenderer[3].texture = backgroundTexture[3];
+
+	tiledRenderer[0].paralaxStrength = 0;
+	tiledRenderer[1].paralaxStrength = 0.2;
+	tiledRenderer[2].paralaxStrength = 0.4;
+	tiledRenderer[3].paralaxStrength = 0.7;
+
 	return true;
 }
 
@@ -64,6 +81,12 @@ bool gameLogic(float deltaTime)
 	glClear(GL_COLOR_BUFFER_BIT); //clear screen
 
 	renderer.updateWindowMetrics(w, h);
+#pragma endregion
+
+#pragma region camera follow
+
+	renderer.currentCamera.follow(data.playerPos, deltaTime * 450, 10, 50, w, h);
+
 #pragma endregion
 
 #pragma region movement
@@ -102,15 +125,9 @@ bool gameLogic(float deltaTime)
 	if (move.x != 0 || move.y != 0)
 	{
 		move = glm::normalize(move);
-		move *= deltaTime * 1000; //500 pixels per seccond
+		move *= deltaTime * 2000; //500 pixels per seccond
 		data.playerPos += move;
 	}
-
-#pragma endregion
-
-#pragma region camera follow
-
-	renderer.currentCamera.follow(data.playerPos, deltaTime * 450, 10, 50, w, h);
 
 #pragma endregion
 
@@ -125,7 +142,7 @@ bool gameLogic(float deltaTime)
 
 #pragma endregion
 
-#pragma region rotation
+#pragma region mouse pos
 
 	glm::vec2 mousePos = platform::getRelMousePosition();
 	glm::vec2 screenCenter(w / 2.f, h / 2.f);
@@ -145,15 +162,33 @@ bool gameLogic(float deltaTime)
 
 #pragma endregion
 
+#pragma region handle bullets
+
+	if (platform::isLMousePressed())
+	{
+		Bullet b;
+
+		b.position = data.playerPos;
+		b.firedDirection = mouseDirection;
+
+		data.bullets.push_back(b);
+	}
+
+	for (auto &b : data.bullets)
+	{
+		b.render(renderer, bulletsTexture, bulletsAtlas);
+	}
+
+#pragma endregion
+
 #pragma region render ship
 
 	constexpr float shipSize = 250.f;
 
-	renderer.renderRectangle({data.playerPos - glm::vec2(shipSize/2, shipSize/2), 200, 200}, spaceShipTexture,
-		Colors_White, {}, glm::degrees(spaceShipAngle) + 90.f, spaceShipsAtlas.get(1, 0));
+	renderer.renderRectangle({data.playerPos - glm::vec2(shipSize/2, shipSize/2), shipSize, shipSize}, spaceShipTexture,
+		Colors_White, {}, glm::degrees(spaceShipAngle) + 90.f, spaceShipsAtlas.get(1, 1));
 
 #pragma endregion
-
 
 	renderer.flush();
 
